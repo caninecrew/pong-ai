@@ -977,6 +977,10 @@ def main():
                 target_latest = os.path.join(cfg.model_dir, f"{model_id}_latest.zip")
                 if os.path.exists(best_latest) and best_latest != target_latest:
                     shutil.copy2(best_latest, target_latest)
+            aggregated_latest = os.path.join(cfg.model_dir, "ppo_pong_custom_latest.zip")
+            if os.path.exists(best_latest):
+                shutil.copy2(best_latest, aggregated_latest)
+                print(f"Updated shared latest checkpoint -> {aggregated_latest} (source: {best_id})")
             # checkpoint pruning
             top_checkpoints.append((best_score_cycle, best_checkpoint_path))
             top_checkpoints = sorted(top_checkpoints, key=lambda t: t[0], reverse=True)
