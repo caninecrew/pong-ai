@@ -14,6 +14,7 @@ Thumbs.db
 
 # Training outputs / logs
 logs/
+models/
 runs/
 tensorboard/
 *.tfevents.*
