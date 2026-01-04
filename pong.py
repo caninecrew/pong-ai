@@ -42,6 +42,7 @@ class PongConfig:
     reward_step: float = -0.0005
 
     render_fps: int = 60  # only used when render_mode="human"
+    ball_color: Tuple[int, int, int] = (255, 0, 0)  # RGB
 
 
 class PongEnv:
@@ -58,9 +59,11 @@ class PongEnv:
         config: PongConfig = PongConfig(),
         render_mode: Optional[str] = None,
         seed: Optional[int] = None,
+        ball_color: Optional[Tuple[int, int, int]] = None,
     ):
         self.cfg = config
         self.render_mode = render_mode  # None or "human"
+        self.ball_color = ball_color or self.cfg.ball_color
 
         if seed is not None:
             random.seed(seed)
@@ -245,7 +248,7 @@ class PongEnv:
         # Entities
         pygame.draw.rect(self.screen, GREEN, self.left_paddle)
         pygame.draw.rect(self.screen, GREEN, self.right_paddle)
-        pygame.draw.circle(self.screen, RED, (int(self.ball_pos.x), int(self.ball_pos.y)), self.cfg.ball_radius)
+        pygame.draw.circle(self.screen, self.ball_color, (int(self.ball_pos.x), int(self.ball_pos.y)), self.cfg.ball_radius)
 
         # Scores
         ltxt = self.font.render(f"L {self.left_score}", True, YELLOW)

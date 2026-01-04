@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable, Optional, List, Tuple
 
 import imageio
 import pygame
@@ -9,6 +9,9 @@ import numpy as np
 from PIL import Image
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
+
+# Change this to control how many timesteps each model trains per run.
+TRAIN_TIMESTEPS = 200_000
 
 from pong import (
     PongEnv,
@@ -30,9 +33,10 @@ class SB3PongEnv(gym.Env):
         self,
         opponent_policy: Optional[Callable[[tuple, bool], Action]] = None,
         render_mode: Optional[str] = None,
+        ball_color: Optional[Tuple[int, int, int]] = None,
     ):
         super().__init__()
-        self.env = PongEnv(render_mode=render_mode)
+        self.env = PongEnv(render_mode=render_mode, ball_color=ball_color)
         self.opponent_policy = opponent_policy or (lambda obs, is_left: STAY)
         self.last_obs: Optional[tuple] = None
 
@@ -68,13 +72,13 @@ class SB3PongEnv(gym.Env):
         self.env.close()
 
 
-def record_video(model: PPO, video_path: str, steps: int = 400) -> None:
+def record_video_segment(model: PPO, ball_color: Tuple[int, int, int], steps: int = 400) -> List[np.ndarray]:
     """
-    Roll out a short episode with the trained model and save an mp4.
+    Roll out a short episode with the trained model and return frames.
     """
-    env = SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode="rgb_array")
+    env = SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode="rgb_array", ball_color=ball_color)
     obs, _ = env.reset()
-    frames = []
+    frames: List[np.ndarray] = []
     target_size = (320, 192)  # divisible by 16 to keep codecs happy
 
     frame = env.render()
@@ -90,13 +94,8 @@ def record_video(model: PPO, video_path: str, steps: int = 400) -> None:
         if terminated or truncated:
             obs, _ = env.reset()
 
-    if frames:
-        imageio.mimsave(video_path, frames, fps=30)
-        print(f"Saved video: {video_path} (frames: {len(frames)})")
-    else:
-        print("No frames captured; video not written.")
-
     env.close()
+    return frames
 
 
 def main():
@@ -111,38 +110,65 @@ def main():
         seed=0,
     )
 
-    latest_path = "models/ppo_pong_custom_latest.zip"
+    # Train multiple model lines in one run; each continues from its own latest checkpoint.
+    model_ids = [
+        "ppo_pong_custom",   # continues your main model
+        "ppo_pong_custom_b", # second line trained in the same run
+    ]
 
-    if os.path.exists(latest_path):
-        print(f"Loading existing model from {latest_path} to continue training...")
-        model = PPO.load(latest_path, env=env)
-    else:
-        print("No existing model found; starting a fresh PPO model...")
-        model = PPO(
-            "MlpPolicy",
-            env,
-            verbose=1,
-            tensorboard_log="logs",
-            n_steps=256,
-            batch_size=512,
-            n_epochs=4,
-            gamma=0.99,
-            learning_rate=2.5e-4,
-        )
-
-    # Shorter run for a quick playable model; bump this higher for better skill.
-    model.learn(total_timesteps=100_000_000)
+    ball_colors = [
+        (255, 0, 0),
+        (0, 200, 255),
+        (255, 200, 0),
+        (0, 255, 120),
+    ]
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    stamped_model_path = f"models/ppo_pong_custom_{timestamp}.zip"
+    combined_frames: List[np.ndarray] = []
 
-    model.save(stamped_model_path)
-    model.save(latest_path)
-    print(f"Saved timestamped model: {stamped_model_path}")
-    print(f"Updated latest model: {latest_path}")
+    for idx, model_id in enumerate(model_ids):
+        latest_path = f"models/{model_id}_latest.zip"
+        color = ball_colors[idx % len(ball_colors)]
 
-    video_path = f"videos/ppo_pong_custom_{timestamp}.mp4"
-    record_video(model, video_path, steps=400)
+        if os.path.exists(latest_path):
+            print(f"[{model_id}] Loading existing model from {latest_path} to continue training...")
+            model = PPO.load(latest_path, env=env)
+        else:
+            print(f"[{model_id}] No existing model found; starting a fresh PPO model...")
+            model = PPO(
+                "MlpPolicy",
+                env,
+                verbose=1,
+                tensorboard_log="logs",
+                n_steps=256,
+                batch_size=512,
+                n_epochs=4,
+                gamma=0.99,
+                learning_rate=2.5e-4,
+            )
+
+        # Adjust timesteps as you like; this continues from the previous checkpoint.
+        model.learn(total_timesteps=TRAIN_TIMESTEPS)
+
+        stamped_model_path = f"models/{model_id}_{timestamp}.zip"
+
+        model.save(stamped_model_path)
+        model.save(latest_path)
+        print(f"[{model_id}] Saved timestamped model: {stamped_model_path}")
+        print(f"[{model_id}] Updated latest model: {latest_path}")
+
+        segment = record_video_segment(model, ball_color=color, steps=400)
+        combined_frames.extend(segment)
+        # Separator frames for clarity between models
+        combined_frames.extend([np.zeros_like(segment[0])] * 5 if segment else [])
+        print(f"[{model_id}] Added {len(segment)} frames with ball color {color} to combined video.")
+
+    if combined_frames:
+        combined_video_path = f"videos/ppo_pong_combined_{timestamp}.mp4"
+        imageio.mimsave(combined_video_path, combined_frames, fps=30)
+        print(f"Saved combined video with all models: {combined_video_path} (frames: {len(combined_frames)})")
+    else:
+        print("No frames captured; combined video not written.")
 
     env.close()
 
