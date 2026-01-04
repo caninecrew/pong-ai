@@ -16,6 +16,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional, List, Tuple, Dict, Any, Sequence
 
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated as an API.*",
+    category=UserWarning,
+    module="pygame.pkgdata",
+)
+
 import gymnasium as gym
 import imageio
 import numpy as np
