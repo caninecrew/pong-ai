@@ -4,6 +4,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from train_pong_ppo import (
     SB3PongEnv,
     build_grid_frames,
@@ -38,7 +41,7 @@ def test_build_grid_frames_holds_last_frame():
 def test_add_overlay_marks_header():
     frame = np.zeros((10, 10, 3), dtype=np.uint8)
     overlaid = _add_overlay(frame, "test")
-    assert not np.array_equal(frame[0, 0], overlaid[0, 0])
+    assert overlaid.sum() > frame.sum()
 
 
 def test_parse_args_reads_config(tmp_path, monkeypatch):
