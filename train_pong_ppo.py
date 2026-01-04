@@ -131,7 +131,7 @@ def main():
         )
 
     # Shorter run for a quick playable model; bump this higher for better skill.
-    model.learn(total_timesteps=100_000)
+    model.learn(total_timesteps=100_000_000)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     stamped_model_path = f"models/ppo_pong_custom_{timestamp}.zip"
