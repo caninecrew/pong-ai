@@ -59,7 +59,7 @@ class SB3PongEnv(gym.Env):
         return np.array(obs, dtype=np.float32), float(reward), terminated, truncated, info
 
     def render(self):
-        self.env.render()
+        return self.env.render()
 
     def close(self):
         self.env.close()
