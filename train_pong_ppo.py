@@ -166,7 +166,7 @@ def build_grid_frames(segments: List[List[np.ndarray]]) -> List[np.ndarray]:
 
 @dataclass
 class TrainConfig:
-    train_timesteps: int = 200_000
+    train_timesteps: int = 300_000
     n_steps: int = 256
     batch_size: int = 512
     n_epochs: int = 4
@@ -176,7 +176,7 @@ class TrainConfig:
     max_video_seconds: int = 120
     max_cycles: int = 1
     checkpoint_interval: int = 1  # cycles between timestamped checkpoints
-    iterations_per_set: int = 2  # how many parallel model lines to train each cycle
+    iterations_per_set: int = 6  # how many parallel model lines to train each cycle
     seed: int = 0
     early_stop_patience: int = 3
     improvement_threshold: float = 0.05
