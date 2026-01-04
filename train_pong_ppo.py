@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from typing import Callable, Optional, List, Tuple
 
+import math
 import imageio
 import pygame
 import gymnasium as gym
@@ -124,7 +125,7 @@ def main():
     ]
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    combined_frames: List[np.ndarray] = []
+    combined_frames_per_model: List[List[np.ndarray]] = []
 
     for idx, model_id in enumerate(model_ids):
         latest_path = f"models/{model_id}_latest.zip"
@@ -158,15 +159,49 @@ def main():
         print(f"[{model_id}] Updated latest model: {latest_path}")
 
         segment = record_video_segment(model, ball_color=color, steps=400)
-        combined_frames.extend(segment)
-        # Separator frames for clarity between models
-        combined_frames.extend([np.zeros_like(segment[0])] * 5 if segment else [])
+        combined_frames_per_model.append(segment)
         print(f"[{model_id}] Added {len(segment)} frames with ball color {color} to combined video.")
 
-    if combined_frames:
+    if combined_frames_per_model and any(combined_frames_per_model):
+        max_len = max(len(seg) for seg in combined_frames_per_model)
+        num_models = len(combined_frames_per_model)
+        cols = math.ceil(math.sqrt(num_models))
+        rows = math.ceil(num_models / cols)
+
+        # Use first available frame as placeholder for padding.
+        placeholder = None
+        for seg in combined_frames_per_model:
+            if seg:
+                placeholder = np.zeros_like(seg[0])
+                break
+
+        grid_frames: List[np.ndarray] = []
+
+        for i in range(max_len):
+            row_images = []
+            for r in range(rows):
+                row_tiles = []
+                for c in range(cols):
+                    idx = r * cols + c
+                    if idx >= num_models:
+                        continue
+                    seg = combined_frames_per_model[idx]
+                    if seg:
+                        if i < len(seg):
+                            row_tiles.append(seg[i])
+                        else:
+                            row_tiles.append(seg[-1])  # hold last frame if shorter
+                    elif placeholder is not None:
+                        row_tiles.append(placeholder)
+                if row_tiles:
+                    row_images.append(np.concatenate(row_tiles, axis=1))
+            if row_images:
+                grid_frame = np.concatenate(row_images, axis=0)
+                grid_frames.append(grid_frame)
+
         combined_video_path = f"videos/ppo_pong_combined_{timestamp}.mp4"
-        imageio.mimsave(combined_video_path, combined_frames, fps=30)
-        print(f"Saved combined video with all models: {combined_video_path} (frames: {len(combined_frames)})")
+        imageio.mimsave(combined_video_path, grid_frames, fps=30)
+        print(f"Saved combined video with all models in a grid: {combined_video_path} (frames: {len(grid_frames)})")
     else:
         print("No frames captured; combined video not written.")
 
