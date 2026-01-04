@@ -418,8 +418,5 @@ def main():
         else:
             print("No frames captured; combined video not written.")
 
-    env.close()
-
-
 if __name__ == "__main__":
     main()
