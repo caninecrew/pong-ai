@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import shutil
 from typing import Callable, Optional, List, Tuple
 
 import math
@@ -126,6 +127,7 @@ def main():
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     combined_frames_per_model: List[List[np.ndarray]] = []
+    scores: List[Tuple[str, float]] = []
 
     for idx, model_id in enumerate(model_ids):
         latest_path = f"models/{model_id}_latest.zip"
@@ -161,6 +163,27 @@ def main():
         segment = record_video_segment(model, ball_color=color, steps=400)
         combined_frames_per_model.append(segment)
         print(f"[{model_id}] Added {len(segment)} frames with ball color {color} to combined video.")
+
+        # Evaluate a quick mean episode reward to choose the best model of this run.
+        eval_env = SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None)
+        episodes = 3
+        total = 0.0
+        for _ in range(episodes):
+            obs, _ = eval_env.reset()
+            done = False
+            ep_rew = 0.0
+            steps = 0
+            while not done and steps < eval_env.env.cfg.max_steps:
+                action, _ = model.predict(obs, deterministic=True)
+                obs, rew, terminated, truncated, _ = eval_env.step(action)
+                ep_rew += rew
+                steps += 1
+                done = terminated or truncated
+            total += ep_rew
+        eval_env.close()
+        avg_rew = total / episodes if episodes else 0.0
+        scores.append((model_id, avg_rew))
+        print(f"[{model_id}] Avg reward over {episodes} eval episodes: {avg_rew:.3f}")
 
     if combined_frames_per_model and any(combined_frames_per_model):
         max_len = max(len(seg) for seg in combined_frames_per_model)
@@ -204,6 +227,18 @@ def main():
         print(f"Saved combined video with all models in a grid: {combined_video_path} (frames: {len(grid_frames)})")
     else:
         print("No frames captured; combined video not written.")
+
+    # Choose best model of this run and make it the base for next runs (copy to all latest).
+    if scores:
+        best_id, best_score = max(scores, key=lambda t: t[1])
+        best_latest = f"models/{best_id}_latest.zip"
+        for model_id in model_ids:
+            target_latest = f"models/{model_id}_latest.zip"
+            if os.path.exists(best_latest) and best_latest != target_latest:
+                shutil.copy2(best_latest, target_latest)
+        print(f"Best model this run: {best_id} (avg reward {best_score:.3f}); propagated to all _latest checkpoints.")
+    else:
+        print("No scores recorded; cannot propagate best model.")
 
     env.close()
 
