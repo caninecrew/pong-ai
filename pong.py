@@ -6,7 +6,6 @@ from typing import Dict, Tuple, Optional, Callable
 import numpy as np
 import pygame
 
-
 # ----------------------------
 # Discrete actions
 # ----------------------------

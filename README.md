@@ -18,6 +18,13 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 - Evaluate a checkpoint: `python eval_pong.py --model-path models/ppo_pong_custom_latest.zip --episodes 5 [--render --output-csv logs/eval.csv]`.
   - Evaluation reports average reward (with CI), win rate, return rate, and rally length; missing models are handled gracefully.
 
+## Mario Kart (Gym Retro)
+- Requires Gym Retro with the `SuperMarioKart-Snes` ROM integrated (`python -m retro.import /path/to/ROMs`).
+- Train: `python train_mariokart_ppo.py --env-id SuperMarioKart-Snes --state MarioCircuit1 --action-set small --train-timesteps 300000`.
+  - Checkpoints and logs follow the same layout (`models/`, `logs/`, `videos/`), with `_latest` always updated and timestamped checkpoints unless `--no-checkpoint` is set.
+  - Flags: reward shaping (`--reward-mode progress|score|mixed`), preprocessing (`--frame-size`, `--frame-stack`, `--frame-skip`, `--no-grayscale`), and PPO knobs (`--n-envs`, `--n-steps`, `--batch-size`, `--learning-rate`, etc.).
+  - Video capture: enabled by default for a short eval rollout; outputs to `videos/ppo_mariokart_<timestamp>.mp4`.
+
 ## Common pitfalls
 - Headless pygame: ensure `SDL_VIDEODRIVER=dummy` is respected (default when not rendering). On Linux servers install `libsdl2-dev` packages; on macOS use `brew install sdl2 sdl2_image`.
 - Gymnasium/pygame versions: stick to recent gymnasium (>=0.29) and pygame (>=2.5) to avoid shape or surface issues.
