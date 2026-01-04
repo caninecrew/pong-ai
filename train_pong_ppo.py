@@ -1,21 +1,19 @@
+import argparse
+import json
 import os
-from datetime import datetime
+import random
 import shutil
+from dataclasses import dataclass, asdict
+from datetime import datetime
 from typing import Callable, Optional, List, Tuple
 
-import math
 import imageio
-import pygame
 import gymnasium as gym
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-
-# Change this to control how many timesteps each model trains per run.
-TRAIN_TIMESTEPS = 200_000
-TARGET_FPS = 30
-MAX_VIDEO_FRAMES = TARGET_FPS * 120  # 2 minutes at 30 fps
+from stable_baselines3.common.utils import set_random_seed
 
 from pong import (
     PongEnv,
@@ -76,7 +74,22 @@ class SB3PongEnv(gym.Env):
         self.env.close()
 
 
-def record_video_segment(model: PPO, ball_color: Tuple[int, int, int], steps: int = 400) -> Tuple[List[np.ndarray], bool]:
+def _add_overlay(frame: np.ndarray, text: str) -> np.ndarray:
+    if not text:
+        return frame
+    img = Image.fromarray(frame)
+    drawer = ImageDraw.Draw(img)
+    drawer.rectangle([(0, 0), (img.width, 22)], fill=(0, 0, 0, 128))
+    drawer.text((5, 4), text, fill=(255, 255, 255))
+    return np.array(img)
+
+
+def record_video_segment(
+    model: PPO,
+    ball_color: Tuple[int, int, int],
+    steps: int = 400,
+    overlay_text: str = "",
+) -> Tuple[List[np.ndarray], bool]:
     """
     Roll out a short episode with the trained model and return frames plus whether the ball was successfully returned.
     """
@@ -88,7 +101,7 @@ def record_video_segment(model: PPO, ball_color: Tuple[int, int, int], steps: in
 
     frame = env.render()
     if frame is not None:
-        frames.append(np.array(Image.fromarray(frame).resize(target_size)))
+        frames.append(_add_overlay(np.array(Image.fromarray(frame).resize(target_size)), overlay_text))
 
     for _ in range(steps):
         action, _ = model.predict(obs, deterministic=True)
@@ -97,7 +110,7 @@ def record_video_segment(model: PPO, ball_color: Tuple[int, int, int], steps: in
             ponged = True
         frame = env.render()
         if frame is not None:
-            frames.append(np.array(Image.fromarray(frame).resize(target_size)))
+            frames.append(_add_overlay(np.array(Image.fromarray(frame).resize(target_size)), overlay_text))
         if terminated or truncated:
             obs, _ = env.reset()
 
@@ -114,8 +127,8 @@ def build_grid_frames(segments: List[List[np.ndarray]]) -> List[np.ndarray]:
 
     max_len = max(len(seg) for seg in segments)
     num_models = len(segments)
-    cols = math.ceil(math.sqrt(num_models))
-    rows = math.ceil(num_models / cols)
+    cols = int(np.ceil(np.sqrt(num_models)))
+    rows = int(np.ceil(num_models / cols))
 
     placeholder = None
     for seg in segments:
@@ -150,22 +163,106 @@ def build_grid_frames(segments: List[List[np.ndarray]]) -> List[np.ndarray]:
     return grid_frames
 
 
+@dataclass
+class TrainConfig:
+    train_timesteps: int = 200_000
+    n_steps: int = 256
+    batch_size: int = 512
+    n_epochs: int = 4
+    gamma: float = 0.99
+    learning_rate: float = 2.5e-4
+    target_fps: int = 30
+    max_video_seconds: int = 120
+    max_cycles: int = 20
+    checkpoint_interval: int = 1  # cycles between timestamped checkpoints
+    seed: int = 0
+    early_stop_patience: int = 3
+    improvement_threshold: float = 0.05
+    eval_episodes: int = 3
+
+    @property
+    def max_video_frames(self) -> int:
+        return self.target_fps * self.max_video_seconds
+
+
+def parse_args() -> TrainConfig:
+    parser = argparse.ArgumentParser(description="Train PPO agents for custom Pong.")
+    parser.add_argument("--train-timesteps", type=int, default=TrainConfig.train_timesteps)
+    parser.add_argument("--n-steps", type=int, default=TrainConfig.n_steps)
+    parser.add_argument("--batch-size", type=int, default=TrainConfig.batch_size)
+    parser.add_argument("--n-epochs", type=int, default=TrainConfig.n_epochs)
+    parser.add_argument("--gamma", type=float, default=TrainConfig.gamma)
+    parser.add_argument("--learning-rate", type=float, default=TrainConfig.learning_rate)
+    parser.add_argument("--target-fps", type=int, default=TrainConfig.target_fps)
+    parser.add_argument("--max-video-seconds", type=int, default=TrainConfig.max_video_seconds)
+    parser.add_argument("--max-cycles", type=int, default=TrainConfig.max_cycles)
+    parser.add_argument("--checkpoint-interval", type=int, default=TrainConfig.checkpoint_interval)
+    parser.add_argument("--seed", type=int, default=TrainConfig.seed)
+    parser.add_argument("--early-stop-patience", type=int, default=TrainConfig.early_stop_patience)
+    parser.add_argument("--improvement-threshold", type=float, default=TrainConfig.improvement_threshold)
+    parser.add_argument("--eval-episodes", type=int, default=TrainConfig.eval_episodes)
+    args = parser.parse_args()
+    return TrainConfig(
+        train_timesteps=args.train_timesteps,
+        n_steps=args.n_steps,
+        batch_size=args.batch_size,
+        n_epochs=args.n_epochs,
+        gamma=args.gamma,
+        learning_rate=args.learning_rate,
+        target_fps=args.target_fps,
+        max_video_seconds=args.max_video_seconds,
+        max_cycles=args.max_cycles,
+        checkpoint_interval=args.checkpoint_interval,
+        seed=args.seed,
+        early_stop_patience=args.early_stop_patience,
+        improvement_threshold=args.improvement_threshold,
+        eval_episodes=args.eval_episodes,
+    )
+
+
+def evaluate_model(model: PPO, episodes: int) -> float:
+    eval_env = SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None)
+    total = 0.0
+    for _ in range(episodes):
+        obs, _ = eval_env.reset()
+        done = False
+        ep_rew = 0.0
+        steps = 0
+        while not done and steps < eval_env.env.cfg.max_steps:
+            action, _ = model.predict(obs, deterministic=True)
+            obs, rew, terminated, truncated, _ = eval_env.step(action)
+            ep_rew += rew
+            steps += 1
+            done = terminated or truncated
+        total += ep_rew
+    eval_env.close()
+    return total / episodes if episodes else 0.0
+
+
 def main():
+    cfg = parse_args()
+    set_random_seed(cfg.seed)
+    random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
+
+    run_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     os.makedirs("models", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
     os.makedirs("videos", exist_ok=True)
+    log_file = os.path.join("logs", f"train_run_{run_timestamp}.jsonl")
 
-    # Vectorize custom Pong environment for PPO.
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"event": "config", **asdict(cfg)}) + "\n")
+
     env = make_vec_env(
         lambda: SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None),
         n_envs=8,
-        seed=0,
+        seed=cfg.seed,
     )
 
-    # Train multiple model lines in one run; each continues from its own latest checkpoint.
     model_ids = [
-        "ppo_pong_custom",   # continues your main model
-        "ppo_pong_custom_b", # second line trained in the same run
+        "ppo_pong_custom",
+        "ppo_pong_custom_b",
     ]
 
     ball_colors = [
@@ -177,12 +274,17 @@ def main():
 
     all_grid_frames: List[np.ndarray] = []
     failure_detected = False
+    best_score = float("-inf")
+    no_improve_cycles = 0
+    max_video_frames = cfg.max_video_frames
 
-    while len(all_grid_frames) < MAX_VIDEO_FRAMES and not failure_detected:
+    cycle = 0
+    while len(all_grid_frames) < max_video_frames and not failure_detected and cycle < cfg.max_cycles:
         combined_frames_per_model: List[List[np.ndarray]] = []
         scores: List[Tuple[str, float]] = []
         pong_flags: List[bool] = []
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        cycle += 1
 
         for idx, model_id in enumerate(model_ids):
             latest_path = f"models/{model_id}_latest.zip"
@@ -198,79 +300,91 @@ def main():
                     env,
                     verbose=1,
                     tensorboard_log="logs",
-                    n_steps=256,
-                    batch_size=512,
-                    n_epochs=4,
-                    gamma=0.99,
-                    learning_rate=2.5e-4,
+                    n_steps=cfg.n_steps,
+                    batch_size=cfg.batch_size,
+                    n_epochs=cfg.n_epochs,
+                    gamma=cfg.gamma,
+                    learning_rate=cfg.learning_rate,
                 )
 
-            model.learn(total_timesteps=TRAIN_TIMESTEPS)
+            model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=False)
 
-            stamped_model_path = f"models/{model_id}_{timestamp}.zip"
+            if cycle % cfg.checkpoint_interval == 0:
+                stamped_model_path = f"models/{model_id}_{timestamp}.zip"
+                model.save(stamped_model_path)
+                print(f"[{model_id}] Saved timestamped model: {stamped_model_path}")
 
-            model.save(stamped_model_path)
             model.save(latest_path)
-            print(f"[{model_id}] Saved timestamped model: {stamped_model_path}")
             print(f"[{model_id}] Updated latest model: {latest_path}")
 
-            segment, ponged = record_video_segment(model, ball_color=color, steps=400)
-            combined_frames_per_model.append(segment)
+            avg_rew = evaluate_model(model, cfg.eval_episodes)
+            scores.append((model_id, avg_rew))
+            print(f"[{model_id}] Avg reward over {cfg.eval_episodes} eval episodes: {avg_rew:.3f}")
+
+            segment, ponged = record_video_segment(
+                model,
+                ball_color=color,
+                steps=400,
+                overlay_text=f"{model_id} | avg {avg_rew:.2f}",
+            )
+            if segment:
+                combined_frames_per_model.append(segment)
             pong_flags.append(ponged)
             print(f"[{model_id}] Added {len(segment)} frames with ball color {color} to combined video. Ponged: {ponged}")
-
-            # Evaluate a quick mean episode reward to choose the best model of this cycle.
-            eval_env = SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None)
-            episodes = 3
-            total = 0.0
-            for _ in range(episodes):
-                obs, _ = eval_env.reset()
-                done = False
-                ep_rew = 0.0
-                steps = 0
-                while not done and steps < eval_env.env.cfg.max_steps:
-                    action, _ = model.predict(obs, deterministic=True)
-                    obs, rew, terminated, truncated, _ = eval_env.step(action)
-                    ep_rew += rew
-                    steps += 1
-                    done = terminated or truncated
-                total += ep_rew
-            eval_env.close()
-            avg_rew = total / episodes if episodes else 0.0
-            scores.append((model_id, avg_rew))
-            print(f"[{model_id}] Avg reward over {episodes} eval episodes: {avg_rew:.3f}")
 
         if combined_frames_per_model and any(combined_frames_per_model):
             grid_frames = build_grid_frames(combined_frames_per_model)
             for frame in grid_frames:
-                if len(all_grid_frames) >= MAX_VIDEO_FRAMES:
+                if len(all_grid_frames) >= max_video_frames:
                     break
                 all_grid_frames.append(frame)
-            print(f"Accumulated {len(all_grid_frames)} frames toward combined video (max {MAX_VIDEO_FRAMES}).")
+            print(f"Accumulated {len(all_grid_frames)} frames toward combined video (max {max_video_frames}).")
         else:
             print("No frames captured this cycle; skipping video accumulation.")
 
-        # Choose best model of this cycle and propagate to all latest checkpoints.
         if scores:
-            best_id, best_score = max(scores, key=lambda t: t[1])
+            best_id, best_score_cycle = max(scores, key=lambda t: t[1])
             best_latest = f"models/{best_id}_latest.zip"
             for model_id in model_ids:
                 target_latest = f"models/{model_id}_latest.zip"
                 if os.path.exists(best_latest) and best_latest != target_latest:
                     shutil.copy2(best_latest, target_latest)
-            print(f"Best model this cycle: {best_id} (avg reward {best_score:.3f}); propagated to all _latest checkpoints.")
+            print(f"Best model this cycle: {best_id} (avg reward {best_score_cycle:.3f}); propagated to all _latest checkpoints.")
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "event": "cycle",
+                            "cycle": cycle,
+                            "scores": scores,
+                            "frames": len(all_grid_frames),
+                            "timestamp": timestamp,
+                        }
+                    )
+                    + "\n"
+                )
+            if best_score_cycle > best_score + cfg.improvement_threshold:
+                best_score = best_score_cycle
+                no_improve_cycles = 0
+            else:
+                no_improve_cycles += 1
         else:
             print("No scores recorded; cannot propagate best model.")
 
-        # Failure condition: no model managed to pong the ball back this cycle.
         if pong_flags and not any(pong_flags):
             print("Failure detected: no model returned the ball this cycle.")
             failure_detected = True
+        if no_improve_cycles >= cfg.early_stop_patience:
+            print(f"No improvement for {no_improve_cycles} cycles; stopping early.")
+            break
 
     if all_grid_frames:
         combined_video_path = f"videos/ppo_pong_combined_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
-        imageio.mimsave(combined_video_path, all_grid_frames, fps=TARGET_FPS)
-        print(f"Saved combined video with all models in a grid: {combined_video_path} (frames: {len(all_grid_frames)})")
+        try:
+            imageio.mimsave(combined_video_path, all_grid_frames, fps=cfg.target_fps)
+            print(f"Saved combined video with all models in a grid: {combined_video_path} (frames: {len(all_grid_frames)})")
+        except ValueError:
+            print("Video frames were empty or invalid; skipping video write.")
     else:
         print("No frames captured; combined video not written.")
 
