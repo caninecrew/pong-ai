@@ -4,7 +4,7 @@ Default keyboard bindings for mupen64plus SDL input (Mario Kart 64).
 These map to the keycodes Mupen64Plus expects in InputAutoCfg.ini:
   Stick: arrow keys (Up/Down/Left/Right)
   A (accelerate): Z                -> keycode 122
-  Z Trig (use item): Left Shift    -> keycode 304  (or pick another key)
+  Z Trig (use item): Left Shift    -> keycode 304
   B (brake/reverse): X             -> keycode 120
   R (hop/power slide): S           -> keycode 115
   L (map toggle): A                -> keycode 97
