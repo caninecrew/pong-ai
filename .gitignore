@@ -1,44 +1,43 @@
-# Virtual environments
-.venv/
-venv/
-.venv311
-
-# Python cache
-__pycache__/
-*.pyc
-
 # OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# Training outputs / logs
+# Python environments
+.venv/
+venv/
+.venv311/
+mk64-venv/
+
+# Python caches
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Training artifacts
 logs/
 models/
 runs/
 tensorboard/
 *.tfevents.*
+videos/
+*.mp4
 
-# Saved models (can be large)
+# Saved models / checkpoints
 *.zip
 *.pth
 *.pt
 
-# Videos (large)
-videos/
-*.mp4
-
-# Local data
+# Local data / ROMs
+mario/
 *.rom
 *.bin
 *.gz
 *.tar
 *.7z
-
-/mk64-venv/
-/mario
 gym_retro-0.8.0-cp38-cp38-win_amd64.whl
 
 # Batch files
-*.bat
+play_mk64.bat
+train_mk64.bat
