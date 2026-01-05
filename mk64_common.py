@@ -5,6 +5,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+import glob
+import stat
 
 
 @dataclass(frozen=True)
@@ -132,3 +134,25 @@ def list_registered_env_ids(keyword: str = "Mario") -> List[str]:
         if keyword.lower() in env_id.lower():
             ids.append(env_id)
     return sorted(ids)
+
+
+def cleanup_stale_x_sockets() -> None:
+    """
+    Remove stale X lock files and repair /tmp/.X11-unix permissions.
+    gym_mupen64plus will spawn Xvfb; stale locks from prior runs can block it.
+    """
+    try:
+        for lock in glob.glob("/tmp/.X*-lock"):
+            try:
+                Path(lock).unlink()
+            except Exception:
+                pass
+        xdir = Path("/tmp/.X11-unix")
+        if xdir.exists():
+            try:
+                xdir.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO | stat.S_ISVTX)
+            except Exception:
+                pass
+    except Exception:
+        # Non-fatal; training can still attempt to proceed.
+        pass

@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Optional
 
 import gym
+import numpy as np
 
 try:
     from mk64_flow_env import register_menu_restricted_env
 except Exception:
     register_menu_restricted_env = None
 
-from mk64_common import require_gym_mupen64plus, list_registered_env_ids
+from mk64_common import require_gym_mupen64plus, list_registered_env_ids, cleanup_stale_x_sockets
 
 
 def require_sb3():
@@ -54,6 +55,8 @@ def main() -> int:
 
     # Ensure MK64 training backend is present.
     require_gym_mupen64plus()
+    # Clear stale X lock files that can prevent Xvfb from starting.
+    cleanup_stale_x_sockets()
 
     # Register the custom flow env if available so gym.make can resolve it.
     if register_menu_restricted_env is not None:
@@ -77,6 +80,32 @@ def main() -> int:
 
     def make_env():
         env = gym.make(args.env_id)
+
+        # Some gym_mupen64plus builds (or wrappers) can return (obs, info) on reset
+        # or the newer 5-tuple on step; SB3 expects the legacy 4-tuple/obs only.
+        original_reset = env.reset
+        original_step = env.step
+
+        def _normalize_obs(obs):
+            if isinstance(obs, tuple):
+                obs = obs[0]
+            return np.asarray(obs)
+
+        def _reset(*args, **kwargs):
+            obs = original_reset(*args, **kwargs)
+            return _normalize_obs(obs)
+
+        def _step(action):
+            result = original_step(action)
+            if isinstance(result, tuple) and len(result) == 5:
+                obs, reward, terminated, truncated, info = result
+                done = terminated or truncated
+                return _normalize_obs(obs), reward, done, info
+            obs, reward, done, info = result
+            return _normalize_obs(obs), reward, done, info
+
+        env.reset = _reset
+        env.step = _step
         # If your env supports seeding, this will apply; otherwise it is harmless.
         try:
             env.reset(seed=args.seed)
