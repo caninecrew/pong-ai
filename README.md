@@ -56,13 +56,13 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 - Notes: this stack uses gym 0.7.4 and is intentionally isolated from the main gymnasium/SB3 requirements. System plugins are not vendored; see .gitignore for ROMs and local venv paths.
 
 ### Default controls (mupen64plus SDL input)
-- Stick: arrow keys (Up/Down/Left/Right)
-- A: Z
-- B: X
-- L: A
-- R: S
-- Start: Enter/Return
-- C-buttons: I (Up), K (Down), J (Left), L (Right)
+- Stick (steer/aim): arrow keys (Up/Down/Left/Right)
+- A (accelerate): Z
+- B (brake/reverse): X
+- R (hop/power slide): S
+- L (map toggle): A
+- Start (pause): Enter/Return
+- C-buttons (camera/quick look): I (Up), K (Down), J (Left), L (Right)
 - D-Pad: disabled by default unless configured in `~/.config/mupen64plus/InputAutoCfg.ini`
 
 ## Common pitfalls
