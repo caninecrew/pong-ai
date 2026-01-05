@@ -12,6 +12,11 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage
 
+try:
+    from mk64_flow_env import register_menu_restricted_env
+except Exception:
+    register_menu_restricted_env = None
+
 from mk64_common import require_gym_mupen64plus, list_registered_env_ids
 
 
@@ -20,7 +25,7 @@ def parse_args():
     p.add_argument(
         "--env-id",
         type=str,
-        default="Mario-Kart-Luigi-Raceway-v0",
+        default="Mario-Kart-Menu-Restricted-v0",
         help="Gym env id for a single track (use --list-envs to discover available ids).",
     )
     p.add_argument("--timesteps", type=int, default=2_000_000)
@@ -40,6 +45,14 @@ def main() -> int:
 
     # Ensure MK64 training backend is present.
     require_gym_mupen64plus()
+
+    # Register the custom flow env if available so gym.make can resolve it.
+    if register_menu_restricted_env is not None:
+        try:
+            register_menu_restricted_env(args.env_id)
+        except Exception:
+            # Non-fatal: fall back to whatever is already registered.
+            pass
 
     if args.list_envs:
         envs = list_registered_env_ids(keyword="Mario")

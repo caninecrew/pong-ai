@@ -247,8 +247,13 @@ def register_menu_restricted_env(env_id: str = "Mario-Kart-Menu-Restricted-v0"):
     """
     Idempotent registration helper so gym.make can find the custom flow env.
     """
-    if env_id in gym.envs.registry.env_specs:  # type: ignore[attr-defined]
-        return
+    try:
+        registry = gym.envs.registry  # type: ignore[attr-defined]
+        specs = getattr(registry, "env_specs", registry)
+        if env_id in specs:
+            return
+    except Exception:
+        pass
     register(
         id=env_id,
         entry_point="mk64_flow_env:MenuScriptedMarioKartEnv",

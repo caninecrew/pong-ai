@@ -24,6 +24,7 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 - Create dedicated venv: `python3.8 -m venv mk64-venv && source mk64-venv/bin/activate`.
 - Install pinned legacy deps: `pip install -r requirements-mk64.txt` then install the wrapper: `pip install --no-deps git+https://github.com/bzier/gym-mupen64plus.git`.
 - Place the ROM where the env expects it: copy your MK64 ROM to `mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64` (keep the filename).
+- Custom flow env (agent picks the driver, menus are scripted, restricted driving actions): `Mario-Kart-Menu-Restricted-v0`.
 - Smoke test:
   ```
   source mk64-venv/bin/activate
