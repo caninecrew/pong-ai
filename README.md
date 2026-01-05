@@ -5,12 +5,10 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 ## Requirements
 - Python 3.9+
 - `pip install -r requirements` equivalent packages: `pygame`, `gymnasium`, `stable-baselines3`, `imageio`, `Pillow`, `numpy`, `torch`, `PyYAML` (for YAML configs)
-- For Mario Kart Retro training: `pip install stable-retro gymnasium stable-baselines3 imageio` and import the SNES ROM once via `python -m retro.import /path/to/roms`
 
 ## Usage
 - Demo the environment: `python pong.py` (controls: W/S left, Up/Down right; auto-tracks when headless).
 - Train agents: `python train_pong_ppo.py --env-kind pong --config configs/example.yaml` or pass flags such as `--train-timesteps 200000 --checkpoint-interval 1 --seed 0 --n-envs 4 --iterations-per-set 2`.
-  - Switch to Mario Kart Retro with `--env-kind kart` and kart-specific knobs like `--kart-action-set drift-lite|steer-basic`, `--kart-frame-size 84`, `--kart-frame-stack 4`, `--kart-no-grayscale`, or `--kart-use-ram` for compact feature observations.
   - Artifacts: models in `models/`, logs in `logs/`, combined videos in `videos/`. Resolved configs are emitted to `logs/train_run_<timestamp>.jsonl`, and per-cycle metrics are appended to `logs/metrics.csv`.
   - Config files: YAML/JSON supported with `--config`. CLI flags always override file values.
   - Checkpoints: `_latest` is always written; timestamped checkpoints can be disabled via `--no-checkpoint`. Top-K pruning keeps the best checkpoints by average reward.
@@ -20,12 +18,24 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 - Evaluate a checkpoint: `python eval_pong.py --model-path models/ppo_pong_custom_latest.zip --episodes 5 [--render --output-csv logs/eval.csv]`.
   - Evaluation reports average reward (with CI), win rate, return rate, and rally length; missing models are handled gracefully.
 
-## Mario Kart (stable-retro)
-- Import the SNES ROM once: `python -m retro.import /path/to/roms` (expects `SuperMarioKart-Snes`).
-- Train via the unified entrypoint: `python train_pong_ppo.py --env-kind kart --kart-state MarioCircuit1 --kart-action-set drift-lite --kart-frame-size 84 --train-timesteps 200000 --iterations-per-set 2 --n-envs 2 --checkpoint-interval 1`.
-  - Reward shaping blends track progress, speed bonuses, lap rewards, and penalties for going off-track or crashing. Observations can be 84x84 grayscale stacks or normalized RAM/info features with `--kart-use-ram`.
-  - Video rollouts resize frames and keep overlay text; checkpoints/logs land in `models/`, `logs/`, and `videos/` as with Pong.
-  - Hardware: Retro envs are heavier; prefer GPU (`--device cuda`) and fewer workers (`--iterations-per-set 1-2`, `--n-envs 2-4`) for a smoke run before scaling up.
+## Mario Kart 64 (gym-mupen64plus, legacy stack)
+- Only Mario Kart 64 via `gym-mupen64plus` is supported; the older stable-retro SNES path is not.
+- System deps (WSL/Ubuntu): `sudo apt-get install -y python3.8 python3.8-venv python3.8-dev build-essential cmake git mupen64plus-ui-console mupen64plus-input-all mupen64plus-video-rice mupen64plus-audio-sdl xvfb`.
+- Create dedicated venv: `python3.8 -m venv mk64-venv && source mk64-venv/bin/activate`.
+- Install pinned legacy deps: `pip install -r requirements-mk64.txt` then install the wrapper: `pip install --no-deps git+https://github.com/bzier/gym-mupen64plus.git`.
+- Place the ROM where the env expects it: copy your MK64 ROM to `mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64` (keep the filename).
+- Smoke test:
+  ```
+  source mk64-venv/bin/activate
+  python - <<'PY'
+  import gym, gym_mupen64plus  # noqa: F401
+  env = gym.make("Mario-Kart-Discrete-Luigi-Raceway-v0")
+  obs = env.reset()
+  print(type(obs), getattr(obs, "shape", None))
+  env.close()
+  PY
+  ```
+- Notes: this stack uses gym 0.7.4 and is intentionally isolated from the main gymnasium/SB3 requirements. System plugins are not vendored; see .gitignore for ROMs and local venv paths.
 
 ## Mario Kart 64 (gym-mupen64plus, legacy stack)
 - System deps (WSL/Ubuntu): `sudo apt-get install -y python3.8 python3.8-venv python3.8-dev build-essential cmake git mupen64plus-ui-console mupen64plus-input-all mupen64plus-video-rice mupen64plus-audio-sdl xvfb`.

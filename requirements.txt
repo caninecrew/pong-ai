@@ -9,4 +9,3 @@ imageio-ffmpeg>=0.4
 pyyaml>=6.0
 tqdm>=4.66
 rich>=13.7
-stable-retro>=0.9.0
