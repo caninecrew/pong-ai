@@ -39,3 +39,6 @@ videos/
 /mk64-venv/
 /mario
 gym_retro-0.8.0-cp38-cp38-win_amd64.whl
+
+# Batch files
+*.bat
