@@ -27,6 +27,24 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
   - Video rollouts resize frames and keep overlay text; checkpoints/logs land in `models/`, `logs/`, and `videos/` as with Pong.
   - Hardware: Retro envs are heavier; prefer GPU (`--device cuda`) and fewer workers (`--iterations-per-set 1-2`, `--n-envs 2-4`) for a smoke run before scaling up.
 
+## Mario Kart 64 (gym-mupen64plus, legacy stack)
+- System deps (WSL/Ubuntu): `sudo apt-get install -y python3.8 python3.8-venv python3.8-dev build-essential cmake git mupen64plus-ui-console mupen64plus-input-all mupen64plus-video-rice mupen64plus-audio-sdl xvfb`.
+- Create dedicated venv: `python3.8 -m venv mk64-venv && source mk64-venv/bin/activate`.
+- Install pinned legacy deps: `pip install -r requirements-mk64.txt` then install the wrapper: `pip install --no-deps git+https://github.com/bzier/gym-mupen64plus.git`.
+- Place the ROM where the env expects it: copy your MK64 ROM to `mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64` (keep the filename).
+- Smoke test:
+  ```
+  source mk64-venv/bin/activate
+  python - <<'PY'
+  import gym, gym_mupen64plus  # noqa: F401
+  env = gym.make("Mario-Kart-Discrete-Luigi-Raceway-v0")
+  obs = env.reset()
+  print(type(obs), getattr(obs, "shape", None))
+  env.close()
+  PY
+  ```
+- Notes: this stack uses gym 0.7.4 and is intentionally isolated from the main gymnasium/SB3 requirements. System plugins are not vendored; see .gitignore for ROMs and local venv paths.
+
 ## Common pitfalls
 - Headless pygame: ensure `SDL_VIDEODRIVER=dummy` is respected (default when not rendering). On Linux servers install `libsdl2-dev` packages; on macOS use `brew install sdl2 sdl2_image`.
 - Gymnasium/pygame versions: stick to recent gymnasium (>=0.29) and pygame (>=2.5) to avoid shape or surface issues.
