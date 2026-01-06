@@ -159,8 +159,14 @@ def main() -> int:
                         # Bypass Gym's __getattr__ blocking of private attrs.
                         render_fn = object.__getattribute__(self, "_render")
                     except Exception:
-                        return None
-                    return render_fn(mode=mode, **kwargs)
+                        render_fn = None
+                    if render_fn is not None:
+                        frame = render_fn(mode=mode, **kwargs)
+                        if frame is not None:
+                            return frame
+                    # Fallback: use latest observation if available.
+                    latest = getattr(self, "_latest_obs", None)
+                    return latest
                 env.render = types.MethodType(_render, env)
                 env._has_render_patch = True
         except Exception:
@@ -179,6 +185,7 @@ def main() -> int:
 
         def _reset(*args, **kwargs):
             obs = original_reset(*args, **kwargs)
+            env._latest_obs = _normalize_obs(obs)
             return _normalize_obs(obs)
 
         def _step(action):
@@ -191,9 +198,13 @@ def main() -> int:
             if isinstance(result, tuple) and len(result) == 5:
                 obs, reward, terminated, truncated, info = result
                 done = terminated or truncated
-                return _normalize_obs(obs), reward, done, info
+                obs = _normalize_obs(obs)
+                env._latest_obs = obs
+                return obs, reward, done, info
             obs, reward, done, info = result
-            return _normalize_obs(obs), reward, done, info
+            obs = _normalize_obs(obs)
+            env._latest_obs = obs
+            return obs, reward, done, info
 
         env.reset = _reset
         env.step = _step
