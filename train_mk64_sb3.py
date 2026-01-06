@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import types
 from typing import Optional
 
 import gym
@@ -85,6 +86,26 @@ def main() -> int:
             # Non-fatal: fall back to whatever is already registered.
             pass
 
+    # gym 0.21's VideoRecorder skips setting `self.path` when video recording
+    # is disabled (e.g., env lacks "rgb_array" / "ansi" render modes). SB3's
+    # VecVideoRecorder still prints `video_recorder.path`, so ensure the attr
+    # always exists to avoid AttributeError when recording is silently disabled.
+    try:
+        from gym.wrappers.monitoring import video_recorder as _gym_video_recorder
+        if not getattr(_gym_video_recorder.VideoRecorder, "_path_guard_installed", False):
+            _orig_init = _gym_video_recorder.VideoRecorder.__init__
+
+            def _init_with_safe_path(self, *iargs, **ikwargs):
+                _orig_init(self, *iargs, **ikwargs)
+                if not hasattr(self, "path"):
+                    self.path = None
+
+            _gym_video_recorder.VideoRecorder.__init__ = _init_with_safe_path
+            _gym_video_recorder.VideoRecorder._path_guard_installed = True
+    except Exception:
+        # If anything goes wrong, just continue; worst case video recording fails later.
+        pass
+
     if args.list_envs:
         envs = list_registered_env_ids(keyword="Mario")
         print("Registered env ids containing 'Mario':")
@@ -122,6 +143,25 @@ def main() -> int:
 
     def make_env():
         env = gym.make(args.env_id)
+
+        # Ensure Gym advertises rgb_array rendering and provides a render() that
+        # returns frames so SB3's VecVideoRecorder can write videos. The upstream
+        # gym_mupen64plus env only declares "human" in metadata, even though it
+        # exposes _render(mode="rgb_array").
+        try:
+            modes = set(env.metadata.get("render.modes", []))
+            modes.update({"human", "rgb_array"})
+            env.metadata["render.modes"] = sorted(modes)
+
+            if not getattr(env, "_has_render_patch", False):
+                def _render(self, mode="human"):
+                    # gym_mupen64plus envs implement _render already.
+                    return self._render(mode=mode)
+                env.render = types.MethodType(_render, env)
+                env._has_render_patch = True
+        except Exception:
+            # Non-fatal: if patching fails, video recording may still be disabled.
+            pass
 
         # Some gym_mupen64plus builds (or wrappers) can return (obs, info) on reset
         # or the newer 5-tuple on step; SB3 expects the legacy 4-tuple/obs only.
