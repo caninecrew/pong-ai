@@ -41,3 +41,7 @@ gym_retro-0.8.0-cp38-cp38-win_amd64.whl
 # Batch files
 play_mk64.bat
 train_mk64.bat
+
+Deb files
+*.deb
+cuda-keyring_1.1-1_all.deb.1
