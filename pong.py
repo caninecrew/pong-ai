@@ -1,7 +1,14 @@
 import os
 import random
+import warnings
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional, Callable
+
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated as an API.*",
+    category=UserWarning,
+)
 
 import numpy as np
 import pygame

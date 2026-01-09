@@ -305,7 +305,7 @@ _progress_bar_checked = False
 _progress_bar_available = False
 
 
-def _progress_bar_ready() -> bool:
+def _progress_bar_ready(suppress_log: bool = False) -> bool:
     """
     Check if optional progress bar deps are present. Prints a hint only once.
     """
@@ -319,7 +319,8 @@ def _progress_bar_ready() -> bool:
 
         _progress_bar_available = True
     except Exception:
-        print("Progress bar disabled (install 'rich' and 'tqdm' or stable-baselines3[extra] to enable).")
+        if not suppress_log:
+            print("Progress bar disabled (install 'rich' and 'tqdm' or stable-baselines3[extra] to enable).")
     return _progress_bar_available
 
 
@@ -501,7 +502,7 @@ def _train_single(
     Path(cfg.model_dir).mkdir(parents=True, exist_ok=True)
     latest_path = os.path.join(cfg.model_dir, f"{model_id}_latest.zip")
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    tb_log_dir = cfg.log_dir if _tensorboard_available() else None
+    tb_log_dir = os.path.join(cfg.log_dir, model_id) if _tensorboard_available() else None
     if tb_log_dir is None:
         print(f"[{model_id}] TensorBoard not installed; disabling tensorboard logging.")
 
@@ -525,7 +526,11 @@ def _train_single(
             device=cfg.device,
         )
 
-    model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=_progress_bar_ready())
+    model.learn(
+        total_timesteps=cfg.train_timesteps,
+        reset_num_timesteps=False,
+        progress_bar=_progress_bar_ready(suppress_log=True),
+    )
 
     stamped_model_path: Optional[str] = None
     if cfg.checkpoint_interval > 0 and not cfg.no_checkpoint:
