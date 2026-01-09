@@ -541,8 +541,12 @@ def _dashboard_html() -> str:
           <div class="label">Cohort Comparison</div>
           <div class="tiny">Pick two runs to compare average performance.</div>
           <div class="controls">
-            <select id="cohortA"></select>
-            <select id="cohortB"></select>
+            <select id="cohortA">
+              <option value="all">All Runs</option>
+            </select>
+            <select id="cohortB">
+              <option value="all">All Runs</option>
+            </select>
           </div>
           <table>
             <thead>
