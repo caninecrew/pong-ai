@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional, List, Tuple, Dict, Any
+from typing import Any, Callable, Optional, List, Sequence, Tuple, Dict, Union, cast
 
 import gymnasium as gym
 import imageio
@@ -77,12 +77,13 @@ class SB3PongEnv(gym.Env):
         self.last_obs = obs
         return np.array(obs, dtype=np.float32), info
 
-    def step(self, action: int):
+    def step(self, action: Union[int, np.integer, np.ndarray]):
         if self.last_obs is None:
             raise RuntimeError("Call reset() before step().")
 
+        action_int = int(action.item()) if isinstance(action, np.ndarray) else int(action)
         right_action = self.opponent_policy(self.last_obs, is_left=False)
-        obs, reward, done, info = self.env.step(action, right_action)
+        obs, reward, done, info = self.env.step(action_int, right_action)
         self.last_obs = obs
 
         terminated = False  # Episodes end only by truncation (step cap) in PongEnv.
@@ -196,7 +197,8 @@ def _safe_write_video(frames: List[np.ndarray], path: Path, fps: int) -> bool:
         path.parent.mkdir(parents=True, exist_ok=True)
         import imageio.v2 as iio  # use v2 API for stable ffmpeg handling
 
-        with iio.get_writer(path, format="FFMPEG", fps=fps) as writer:
+        writer = cast(Any, iio.get_writer(path, format="ffmpeg", fps=fps))  # type: ignore[arg-type]
+        with writer:
             for frame in frames:
                 writer.append_data(frame)
         return True
@@ -364,7 +366,7 @@ def evaluate_model(model: PPO, episodes: int) -> Dict[str, float]:
             wins += 1
     eval_env.close()
 
-    def _ci(arr: List[float]) -> float:
+    def _ci(arr: Sequence[Union[float, int]]) -> float:
         if len(arr) < 2:
             return 0.0
         std = float(np.std(arr, ddof=1))
@@ -402,12 +404,12 @@ def _train_single(
         try:
             cpu_ids = [int(x) for x in cfg.cpu_affinity.split(",") if x.strip()]
             if hasattr(os, "sched_setaffinity"):
-                os.sched_setaffinity(0, cpu_ids)
+                os.sched_setaffinity(0, cpu_ids)  # type: ignore[attr-defined]
         except Exception:
             pass
 
     def _make_env_with_retry(attempts: int = 3):
-        last_err = None
+        last_err: Optional[Exception] = None
         for _ in range(attempts):
             try:
                 return make_vec_env(
@@ -418,7 +420,9 @@ def _train_single(
             except Exception as exc:  # pragma: no cover - only on flaky init
                 last_err = exc
                 time.sleep(0.5)
-        raise last_err
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("Failed to create environments but no error captured.")
 
     env = _make_env_with_retry()
     Path(cfg.model_dir).mkdir(parents=True, exist_ok=True)
