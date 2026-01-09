@@ -64,9 +64,7 @@ class PongEnv:
         self.cfg = config
         self.render_mode = render_mode  # None or "human"
         self.ball_color = ball_color or self.cfg.ball_color
-
-        if seed is not None:
-            random.seed(seed)
+        self._rng = random.Random(seed)
 
         # Important: dummy video driver must be set BEFORE pygame.init()
         if self.render_mode != "human":
@@ -94,7 +92,7 @@ class PongEnv:
         self.ball_pos = pygame.Vector2(0, 0)
         self.ball_vel = pygame.Vector2(0, 0)
 
-        self.reset()
+        self.reset(seed=seed)
 
     # ----------------------------
     # Rendering controls
@@ -130,7 +128,9 @@ class PongEnv:
     # ----------------------------
     # API
     # ----------------------------
-    def reset(self) -> Tuple[Tuple[float, ...], Dict]:
+    def reset(self, seed: Optional[int] = None) -> Tuple[Tuple[float, ...], Dict]:
+        if seed is not None:
+            self._rng.seed(seed)
         self.left_score = 0
         self.right_score = 0
         self.steps = 0
@@ -141,7 +141,7 @@ class PongEnv:
         self.right_paddle.x = self.cfg.width - self.cfg.paddle_w - 1
         self.right_paddle.y = (self.cfg.height - self.cfg.paddle_h) // 2
 
-        self._reset_ball(to_right=random.choice([True, False]))
+        self._reset_ball(to_right=self._rng.choice([True, False]))
 
         return self._get_obs(), self._info()
 
@@ -274,12 +274,12 @@ class PongEnv:
     def _reset_ball(self, to_right: bool) -> None:
         self.ball_pos = pygame.Vector2(self.cfg.width / 2, self.cfg.height / 2)
 
-        vx = random.uniform(self.cfg.ball_speed_min_x, self.cfg.ball_speed_max_x)
-        vy = random.uniform(self.cfg.ball_speed_min_y, self.cfg.ball_speed_max_y)
+        vx = self._rng.uniform(self.cfg.ball_speed_min_x, self.cfg.ball_speed_max_x)
+        vy = self._rng.uniform(self.cfg.ball_speed_min_y, self.cfg.ball_speed_max_y)
 
         if not to_right:
             vx = -vx
-        if random.choice([True, False]):
+        if self._rng.choice([True, False]):
             vy = -vy
 
         self.ball_vel = pygame.Vector2(vx, vy)
