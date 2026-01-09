@@ -246,7 +246,7 @@ class TrainConfig:
     target_fps: int = 30
     max_video_seconds: int = 30  # total seconds per cycle video
     video_steps: int = 600  # total frames per cycle video
-    max_cycles: int = 1
+    max_cycles: int = 5
     checkpoint_interval: int = 1  # cycles between timestamped checkpoints
     iterations_per_set: int = 6  # how many parallel model lines to train each cycle
     n_envs: int = 8  # vectorized envs per PPO learner
