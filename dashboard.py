@@ -555,6 +555,7 @@ def _dashboard_html() -> str:
         <div class="card">
           <div class="label">Cohort Comparison</div>
           <div class="tiny">Pick two runs to compare average performance.</div>
+          <div id="cohortStatus" class="tiny">Runs available: --</div>
           <div class="controls">
             <select id="cohortA">
               <option value="all">All Runs</option>
@@ -725,6 +726,9 @@ document.querySelectorAll('.sidebar .menu button[data-panel]').forEach(btn => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(`panel-${panel}`);
     if (target) target.classList.add('active');
+    if (panel === 'cohorts') {
+      refreshReports();
+    }
   });
 });
 
@@ -1141,8 +1145,12 @@ async function refreshReports() {
     updateRunSelectors();
     updateTimeline();
     updateCohorts();
+    const status = document.getElementById('cohortStatus');
+    if (status) status.textContent = `Runs available: ${reportCache.length}`;
   } catch (err) {
     reportCache = [];
+    const status = document.getElementById('cohortStatus');
+    if (status) status.textContent = 'Runs available: error loading reports';
   }
 }
 
