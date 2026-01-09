@@ -59,7 +59,7 @@ def _resolve_affinity_list(cpu_affinity: Optional[str], n_envs: int) -> Optional
         return [int(x) for x in cpu_affinity.split(",") if x.strip()]
     except Exception:
         return None
-
+ 
 
 from pong import (
     PongEnv,
