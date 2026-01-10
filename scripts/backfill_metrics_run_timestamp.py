@@ -56,6 +56,7 @@ def backfill_metrics(metrics_csv: Path, timestamp_map: dict, run_timestamps: lis
     updated = 0
     def _valid_ts(ts: str) -> bool:
         return len(ts) == 15 and ts[8] == "-" and ts.replace("-", "").isdigit()
+    last_assigned = ""
     with metrics_csv.open("r", newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         fieldnames = [f for f in (reader.fieldnames or []) if f]
@@ -72,7 +73,11 @@ def backfill_metrics(metrics_csv: Path, timestamp_map: dict, run_timestamps: lis
                     if chosen:
                         row["run_timestamp"] = chosen
                         updated += 1
+                elif last_assigned:
+                    row["run_timestamp"] = last_assigned
+                    updated += 1
             clean_row = {key: row.get(key, "") for key in fieldnames}
+            last_assigned = clean_row.get("run_timestamp", "") or last_assigned
             rows.append(clean_row)
     with metrics_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)

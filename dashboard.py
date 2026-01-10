@@ -671,9 +671,12 @@ async function refreshHeatmap() {
   let data = null;
   try {
     const res = await fetch('/api/heatmap');
+    if (!res.ok) {
+      throw new Error(`heatmap HTTP ${res.status}`);
+    }
     data = await res.json();
   } catch (err) {
-    document.getElementById('heatmapNote').textContent = 'Heatmap fetch failed.';
+    document.getElementById('heatmapNote').textContent = `Heatmap fetch failed: ${err}`;
     drawEmpty(document.getElementById('heatmap'), 'Heatmap error');
     return;
   }
@@ -749,19 +752,32 @@ async function refreshCharts() {
   let data = null;
   try {
     const res = await fetch('/api/metrics');
+    if (!res.ok) {
+      throw new Error(`metrics HTTP ${res.status}`);
+    }
     data = await res.json();
   } catch (err) {
     drawEmpty(document.getElementById('chartReward'), 'Metrics fetch failed');
     drawEmpty(document.getElementById('chartWin'), 'Metrics fetch failed');
     drawEmpty(document.getElementById('chartDelta'), 'Metrics fetch failed');
     drawEmpty(document.getElementById('chartRally'), 'Metrics fetch failed');
+    document.getElementById('dataLine').textContent = `Data: error (${err})`;
     return;
   }
-  metricsSeries = data.series || [];
-  const series = filterByRun(metricsSeries, selectedRun);
-  document.getElementById('dataLine').textContent = `Data: ${series.length} rows`;
-  if (!series.length) {
-    drawEmpty(document.getElementById('chartReward'), 'No metrics yet');
+  if (data.error) {
+    drawEmpty(document.getElementById('chartReward'), 'Metrics error');
+    drawEmpty(document.getElementById('chartWin'), 'Metrics error');
+    drawEmpty(document.getElementById('chartDelta'), 'Metrics error');
+    drawEmpty(document.getElementById('chartRally'), 'Metrics error');
+    document.getElementById('dataLine').textContent = `Data: error (${data.error})`;
+    return;
+  }
+  try {
+    metricsSeries = data.series || [];
+    const series = filterByRun(metricsSeries, selectedRun);
+    document.getElementById('dataLine').textContent = `Data: ${series.length} rows`;
+    if (!series.length) {
+      drawEmpty(document.getElementById('chartReward'), 'No metrics yet');
     drawEmpty(document.getElementById('chartWin'), 'No metrics yet');
     drawEmpty(document.getElementById('chartDelta'), 'No metrics yet');
     drawEmpty(document.getElementById('chartRally'), 'No metrics yet');
@@ -840,11 +856,18 @@ async function refreshCharts() {
   drawLineChart(document.getElementById('chartRally'), cycles, [
     { label: compareMode, color: '#ff5f7a', values: rallies },
   ], 'Avg Rally Length');
-  drawDistributions(byCycle);
-  drawCorrelations(series);
-  updateLeaderboard(series);
-  updateQualityGates(series);
-  updateVideoInsights(series);
+    drawDistributions(byCycle);
+    drawCorrelations(series);
+    updateLeaderboard(series);
+    updateQualityGates(series);
+    updateVideoInsights(series);
+  } catch (err) {
+    drawEmpty(document.getElementById('chartReward'), 'Training charts failed');
+    drawEmpty(document.getElementById('chartWin'), 'Training charts failed');
+    drawEmpty(document.getElementById('chartDelta'), 'Training charts failed');
+    drawEmpty(document.getElementById('chartRally'), 'Training charts failed');
+    document.getElementById('dataLine').textContent = `Data: chart error (${err})`;
+  }
 }
 
 function drawLineChart(canvas, xs, series, title) {
