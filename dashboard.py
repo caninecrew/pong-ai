@@ -636,10 +636,22 @@ let compareMode = "avg";
 let rollingEnabled = false;
 let activePanel = "overview";
 let lastReportKey = "";
+const apiBase = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get('api') || '';
+  if (override) return override.replace(/\\/$/, '');
+  const proto = window.location.protocol;
+  if (proto === 'http:' || proto === 'https:') return '';
+  return 'http://127.0.0.1:8000';
+})();
+
+function apiFetch(path, options) {
+  return fetch(`${apiBase}${path}`, options);
+}
 
 async function refreshStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res = await apiFetch('/api/status');
     const data = await res.json();
     const metrics = data.metrics || {};
     const report = (data.report || {}).summary || {};
@@ -670,7 +682,7 @@ async function refreshStatus() {
 async function refreshHeatmap() {
   let data = null;
   try {
-    const res = await fetch('/api/heatmap');
+    const res = await apiFetch('/api/heatmap');
     if (!res.ok) {
       throw new Error(`heatmap HTTP ${res.status}`);
     }
@@ -751,7 +763,7 @@ document.querySelectorAll('.card .menu button[data-heat]').forEach(btn => {
 async function refreshCharts() {
   let data = null;
   try {
-    const res = await fetch('/api/metrics');
+    const res = await apiFetch('/api/metrics');
     if (!res.ok) {
       throw new Error(`metrics HTTP ${res.status}`);
     }
@@ -1166,7 +1178,7 @@ function drawSparkline(canvas, values) {
 
 async function refreshReports() {
   try {
-    const res = await fetch('/api/reports');
+    const res = await apiFetch('/api/reports');
     const data = await res.json();
     reportCache = data.reports || [];
     const key = reportCache.map(r => r.run_timestamp || '').join('|');
@@ -1328,7 +1340,7 @@ function fmt(val) {
 
 async function refreshAnnotations() {
   try {
-    const res = await fetch('/api/annotations');
+    const res = await apiFetch('/api/annotations');
     const data = await res.json();
     annotationsCache = data.notes || [];
     renderNotes();
@@ -1405,7 +1417,7 @@ document.getElementById('noteSave').addEventListener('click', async () => {
   const cycle = parseInt(document.getElementById('noteCycle').value || '0', 10);
   const note = document.getElementById('noteText').value || '';
   if (!note) return;
-  await fetch('/api/annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cycle, note, run_id: selectedRun }) });
+  await apiFetch('/api/annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cycle, note, run_id: selectedRun }) });
   document.getElementById('noteText').value = '';
   refreshAnnotations();
 });
