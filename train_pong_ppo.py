@@ -846,6 +846,7 @@ def main():
                         "avg_rally_length",
                         "delta_reward",
                         "timestamp",
+                        "run_timestamp",
                     ],
                 )
                 if not metrics_csv_exists:
@@ -862,6 +863,7 @@ def main():
                             **metrics,
                             "delta_reward": delta_reward if delta_reward is not None else "",
                             "timestamp": timestamp,
+                            "run_timestamp": run_timestamp,
                         }
                     )
 

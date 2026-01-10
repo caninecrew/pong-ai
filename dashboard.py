@@ -203,6 +203,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                     "avg_return_rate_ci": float(row.get("avg_return_rate_ci", 0.0)),
                                     "delta_reward": float(row.get("delta_reward", 0.0)) if row.get("delta_reward") else 0.0,
                                     "timestamp": row.get("timestamp", ""),
+                                    "run_id": row.get("run_timestamp", ""),
                                 }
                             )
                         except Exception:
@@ -1179,6 +1180,8 @@ function updateRunSelectors() {
 
 function filterByRun(series, runId) {
   if (!runId || runId === 'all') return series;
+  const byRunId = series.filter(row => row.run_id && row.run_id === runId);
+  if (byRunId.length) return byRunId;
   const report = reportCache.find(r => r.run_timestamp === runId);
   if (!report) return series;
   const cycles = report.summary?.cycles || [];
